@@ -1,0 +1,11 @@
+{
+  "watch": ["src"],
+  "ext": "js",
+  "ignore": ["src/**/*.test.js", "src/utils/logger.js"],
+  "exec": "node --inspect src/app.js",
+  "env": {
+    "DEBUG_MODE": "true",
+    "NODE_ENV": "development",
+    "LOG_LEVEL": "debug"
+  }
+}

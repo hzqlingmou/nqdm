@@ -1,0 +1,39 @@
+{
+  "name": "nqdm",
+  "version": "1.0.0",
+  "description": "基于Docker+WebUI的NapcatQQ实例管理工具",
+  "main": "src/app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon",
+    "debug": "nodemon --inspect"
+  },
+  "dependencies": {
+    "dockerode": "^3.3.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "log4js": "^6.9.1",
+    "morgan": "^1.10.0",
+    "uuid": "^9.0.0",
+    "ws": "^8.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hzqlingmou/nqdm.git"
+  },
+  "keywords": [
+    "docker",
+    "napcat",
+    "webui"
+  ],
+  "author": "EscapedSpark",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/hzqlingmou/nqdm/issues"
+  },
+  "homepage": "https://github.com/hzqlingmou/nqdm#readme",
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
