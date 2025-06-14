@@ -77,7 +77,7 @@ class TaskManager {
                 case 'disconnect_network':
                     return this.disconnectNetwork(task);
                 default:
-                    throw new Error(`Unknown task type: ${task.type}`);
+                    logger.error(`Unknown task type: ${task.type}`);
             }
         } catch (error) {
             logger.error(error);
