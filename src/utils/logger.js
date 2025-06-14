@@ -1,6 +1,5 @@
 import log4js from 'log4js';
 import config from '../config.js';
-import { WebSocketServer } from 'ws';
 import process from 'process';
 
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
@@ -75,7 +74,6 @@ logger.log = function(level, ...args) {
     broadcastLog(`[${level}] ${args.join(' ')}`);
 };
 
-// 导出日志功能
 export const getLogger = () => logger;
 export const getErrorLogger = () => errorLogger;
 export const connectWebSocket = (ws) => {

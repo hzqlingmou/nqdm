@@ -80,7 +80,7 @@ class TaskManager {
                     throw new Error(`Unknown task type: ${task.type}`);
             }
         } catch (error) {
-            throw error;
+            logger.error(error);
         }
     }
 

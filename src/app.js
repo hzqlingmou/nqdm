@@ -150,6 +150,7 @@ app.use((err, req, res, next) => {
     }
 
     res.status(500).json(errorResponse);
+    next()
 });
 
 server.listen(config.PORT, () => {
