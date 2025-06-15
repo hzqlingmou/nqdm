@@ -119,12 +119,11 @@ function getRegisteredRoutes(app) {
     return routes;
 }
 
-// 处理所有未注册的路由 (404)
 app.use('*', (req, res) => {
     logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
 
     res.status(404).json({
-        status: 'error',
+        code: 404,
         message: 'Path Not Found',
         path: req.originalUrl,
         method: req.method,
