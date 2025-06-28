@@ -33,21 +33,97 @@ if (!fs.existsSync(logDir)) {
     logger.info(`Created log directory: ${logDir}`);
 }
 
-// 设置WebSocket服务器
-const wss = new WebSocketServer({ server, path: '/ws-logs' });
-wss.on('connection', (ws) => {
-    connectWebSocket(ws);
-    logger.info('New WebSocket client connected');
+// 恒定时间比较函数（防止时序攻击）
+function timingSafeCompare(a, b) {
+    const bufferA = Buffer.from(a);
+    const bufferB = Buffer.from(b);
+
+    if (bufferA.length !== bufferB.length) {
+        return false;
+    }
+
+    let result = 0;
+    for (let i = 0; i < bufferA.length; i++) {
+        result |= bufferA[i] ^ bufferB[i];
+    }
+
+    return result === 0;
+}
+
+
+const wss = new WebSocketServer({
+    server,
+    path: '/ws-logs',
+    verifyClient: (info, done) => {
+        const authHeader = info.req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            logger.warn('Authorization header missing or invalid');
+            done(false, 401, 'Unauthorized');
+            return;
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        // 使用恒定时间比较防止时序攻击
+        const valid = timingSafeCompare(token, config.API_TOKEN);
+
+        if (!valid) {
+            logger.warn('Invalid API token provided');
+            done(false, 401, 'Unauthorized');
+            return;
+        }
+
+        logger.debug('WebSocket request authenticated successfully');
+        done(true);
+    }
 });
 
-// HTTP请求日志中间件
+wss.on('connection', (ws, req) => {
+    const ip = req.socket.remoteAddress;
+    logger.info(`New WebSocket connection from ${ip}`);
+
+    // 增强心跳检测
+    let isAlive = true;
+
+    const heartbeat = () => {
+        isAlive = true;
+    };
+
+    ws.on('pong', heartbeat);
+
+    // 心跳检测间隔（30秒）
+    const heartbeatInterval = setInterval(() => {
+        if (!isAlive) {
+            logger.warn(`Terminating unresponsive WebSocket connection from ${ip}`);
+            return ws.terminate();
+        }
+
+        isAlive = false;
+        ws.ping();
+    }, 30000);
+
+    // 处理连接关闭
+    ws.on('close', (code, reason) => {
+        clearInterval(heartbeatInterval);
+        logger.info(`WebSocket closed [${code}]: ${reason || 'No reason provided'}`);
+    });
+
+    // 错误处理
+    ws.on('error', (error) => {
+        logger.error(`WebSocket error from ${ip}: ${error.message}`, { error });
+    });
+
+    // 初始化WebSocket连接
+    connectWebSocket(ws);
+});
+
 app.use(morgan(DEBUG_MODE ? 'dev' : 'combined', {
     stream: {
         write: (message) => logger.info(message.trim())
     }
 }));
 
-// 解析JSON请求体
 app.use(express.json());
 
 // 路由
@@ -61,10 +137,9 @@ app.get('/health', (req, res) => {
         status: 'up',
         message: 'Service is healthy',
         debug: DEBUG_MODE,
-        environment: NODE_ENV,
-        version: process.env.npm_package_version,
         uptime: process.uptime(),
-        memory: process.memoryUsage()
+        memory: process.memoryUsage(),
+        websockets: wss.clients.size
     };
 
     logger.debug('Health check request', serverStatus);
@@ -81,7 +156,15 @@ if (DEBUG_MODE) {
             pid: process.pid,
             memory: process.memoryUsage(),
             env: process.env,
-            routes: getRegisteredRoutes(app)
+            routes: getRegisteredRoutes(app),
+            websockets: {
+                count: wss.clients.size,
+                clients: Array.from(wss.clients).map(client => ({
+                    readyState: client.readyState,
+                    protocol: client.protocol,
+                    ip: client._socket.remoteAddress
+                }))
+            }
         };
 
         logger.debug('Debug endpoint accessed');
@@ -119,6 +202,7 @@ function getRegisteredRoutes(app) {
     return routes;
 }
 
+// 404处理
 app.use('*', (req, res) => {
     logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
 
@@ -149,13 +233,14 @@ app.use((err, req, res, next) => {
     }
 
     res.status(500).json(errorResponse);
-    next()
 });
 
+// 启动服务器
 server.listen(config.PORT, () => {
     logger.info(`Server running on port ${config.PORT}`);
     logger.info(`Log level: ${logger.level}`);
     logger.info(`Docker socket: ${config.DOCKER_SOCKET_PATH}`);
+    logger.info(`WebSocket authentication token: ${config.API_TOKEN ? '***** (set)' : 'not set'}`);
 
     if (DEBUG_MODE) {
         logger.debug('Debug mode enabled');
@@ -176,3 +261,28 @@ server.listen(config.PORT, () => {
 if (DEBUG_MODE) {
     logger.debug('Hot reload is enabled. Server will restart on file changes.');
 }
+
+// 优雅关闭处理
+process.on('SIGINT', () => {
+    logger.info('SIGINT received. Closing server...');
+
+    // 关闭所有WebSocket连接
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.close(1001, 'Server shutting down');
+        }
+    });
+
+    // 关闭HTTP服务器
+    server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    logger.info('SIGTERM received. Closing server...');
+    server.close(() => {
+        process.exit(0);
+    });
+});

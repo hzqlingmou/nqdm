@@ -50,11 +50,9 @@ log4js.configure({
     }
 });
 
-// 获取日志实例
 const logger = log4js.getLogger();
 const errorLogger = log4js.getLogger('error');
 
-// 自定义广播函数
 const broadcastLog = (message) => {
     for (const client of clients) {
         if (client.readyState === 1) {
@@ -67,7 +65,6 @@ const broadcastLog = (message) => {
     }
 };
 
-// 重写logger方法添加广播
 const originalLog = logger.log;
 logger.log = function(level, ...args) {
     originalLog.apply(this, [level, ...args]);
